@@ -12,29 +12,46 @@ def monte_carlo_price(
 ) -> tuple[float, float]:
     """Returns a tuple: (estimated_price, standard_error)."""
 
-    # Generate random standard normal variables
-    Z = np.random.normal(0, 1, n_sims)
+    # Antithetic variates
+    half_sims = n_sims // 2
 
-    # Simulate terminal stock prices
-    ST = S0 * np.exp(
+    Z = np.random.normal(0, 1, half_sims)
+    Z_antithetic = -Z
+
+    # Simulate terminal prices for Z and -Z
+    ST_1 = S0 * np.exp(
         (r - 0.5 * sigma**2) * T
         + sigma * np.sqrt(T) * Z
     )
 
-    # Calculate option payoff
+    ST_2 = S0 * np.exp(
+        (r - 0.5 * sigma**2) * T
+        + sigma * np.sqrt(T) * Z_antithetic
+    )
+
+    # Calculate option payoffs
     if option_type == "call":
-        payoff = np.maximum(ST - K, 0)
+        payoff_1 = np.maximum(ST_1 - K, 0)
+        payoff_2 = np.maximum(ST_2 - K, 0)
+
     elif option_type == "put":
-        payoff = np.maximum(K - ST, 0)
+        payoff_1 = np.maximum(K - ST_1, 0)
+        payoff_2 = np.maximum(K - ST_2, 0)
+
     else:
         raise ValueError("option_type must be 'call' or 'put'")
 
-    # Discount payoff to present value
-    discounted_payoff = np.exp(-r * T) * payoff
+    # Average each antithetic pair
+    pair_payoff = (payoff_1 + payoff_2) / 2
+
+    # Discount to present value
+    discounted_payoff = np.exp(-r * T) * pair_payoff
 
     # Monte Carlo price and standard error
     estimated_price = np.mean(discounted_payoff)
-    standard_error = np.std(discounted_payoff, ddof=1) / np.sqrt(n_sims)
+    standard_error = (
+        np.std(discounted_payoff, ddof=1) / np.sqrt(half_sims)
+    )
 
     return estimated_price, standard_error
 
